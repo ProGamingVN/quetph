@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuetpH — Hiệu chỉnh thang đo</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <div class="brand-text">
+      <div class="title">QuetpH</div>
+      <div class="subtitle">Calibration · Tạo thang đo pH</div>
+    </div>
+  </div>
+  <nav class="nav-tabs">
+    <a href="index.html">Quét mẫu</a>
+    <a href="live.html">Quét trực tiếp</a>
+    <a href="compare.html">So sánh màu</a>
+    <a href="calibration.html" class="active">Hiệu chỉnh thang đo</a>
+  </nav>
+</header>
+
+<main class="wrap">
+  <div class="grid">
+
+    <!-- CỘT TRÁI: quét mẫu chuẩn -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Mẫu chuẩn (pH đã biết)</h2>
+        <span class="tag" id="camTag">camera1</span>
+      </div>
+
+      <div class="dropzone" id="dropzone">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 9l5-5 5 5M12 4v13"/>
+        </svg>
+        <div>Kéo thả ảnh mẫu chuẩn vào đây, hoặc bấm để chọn ảnh</div>
+        <div class="hint">Mỗi ảnh nên chứa 1 mẫu đã biết pH, có nền trắng xung quanh</div>
+        <input type="file" id="fileInput" accept="image/*">
+      </div>
+
+      <div class="hint-bubble" style="margin-top:14px;">
+        Click trực tiếp vào mẫu trong ảnh để quét. Hệ thống tự xác định vùng mẫu, loại viền, lấy RGB lõi và RGB nền trắng xung quanh — giống hệt pipeline của chế độ Tự động ở trang Quét mẫu.
+      </div>
+
+      <div class="stage" id="stage" style="margin-top:14px;">
+        <div class="empty-msg" id="emptyMsg">Chưa có ảnh được nạp.<br>Đăng ảnh mẫu chuẩn để bắt đầu quét.</div>
+        <div class="stage-inner" id="stageInner" style="display:none;">
+          <canvas id="canvas" class="point-cursor"></canvas>
+          <canvas id="overlayCanvas" class="overlay-canvas"></canvas>
+        </div>
+      </div>
+
+      <div class="btn-row" style="margin-top:10px;">
+        <label class="pill" style="cursor:pointer;"><input type="checkbox" id="dbgObject" checked style="vertical-align:middle;"> Vùng mẫu</label>
+        <label class="pill" style="cursor:pointer;"><input type="checkbox" id="dbgInner" checked style="vertical-align:middle;"> Vùng đo màu (lõi)</label>
+        <label class="pill" style="cursor:pointer;"><input type="checkbox" id="dbgBackground" checked style="vertical-align:middle;"> Nền tham chiếu</label>
+      </div>
+
+      <div id="scanError" style="display:none; margin-top:12px; font-family:var(--mono); font-size:11px; color:var(--coral);"></div>
+
+      <div id="scanResult" style="display:none; margin-top:16px;">
+        <div class="swatch-row">
+          <div class="swatch" id="swatchCore" style="background:#eee;"></div>
+          <div class="swatch-info">CORE SAMPLE<br><b id="coreRgbText">—</b></div>
+        </div>
+        <div class="swatch-row">
+          <div class="swatch" id="swatchWhite" style="background:#eee;"></div>
+          <div class="swatch-info">WHITE BACKGROUND<br><b id="whiteRgbText">—</b></div>
+        </div>
+
+        <div id="qualityBox" style="margin-top:12px; font-family:var(--mono); font-size:11px;">
+          <span class="pill" id="qualityBadge">—</span>
+          <ul id="qualityIssues" style="margin:8px 0 0; padding-left:18px; color:var(--muted);"></ul>
+        </div>
+
+        <div class="field-row" style="margin-top:14px;">
+          <label>pH thực tế</label>
+          <input type="number" id="phInput" step="0.01" min="0" max="14" placeholder="vd. 3.0">
+        </div>
+
+        <div class="btn-row">
+          <button class="primary" id="addPointBtn" disabled>➕ Thêm vào thang đo</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- CỘT PHẢI: bảng calibration -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Calibration Chart</h2>
+        <span class="tag" id="pointCountTag">0 mốc</span>
+      </div>
+
+      <div id="calibEmpty" style="font-family:var(--mono); font-size:11px; color:var(--muted);">
+        Chưa có mốc calibration nào. Quét mẫu chuẩn ở cột bên trái rồi bấm "Thêm vào thang đo".
+      </div>
+
+      <table class="calib-table" id="calibChartTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>pH</th>
+            <th>Sample RGB</th>
+            <th>White RGB</th>
+            <th>Trạng thái</th>
+            <th>Hành động</th>
+          </tr>
+        </thead>
+        <tbody id="calibChartBody"></tbody>
+      </table>
+
+      <div class="btn-row">
+        <button id="copyJsonBtn">📋 Copy JSON</button>
+        <button id="copyJsBtn">📋 Copy JavaScript</button>
+        <button class="ghost" id="clearAllBtn">🗑 Xoá toàn bộ thang đo</button>
+      </div>
+      <div id="copyFeedback" style="display:none; margin-top:8px; font-family:var(--mono); font-size:11px; color:var(--teal-deep);"></div>
+
+      <details class="calib" style="margin-top:20px;">
+        <summary>ℹ️ Cách hoạt động</summary>
+        <p style="font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:8px; line-height:1.6;">
+          Mỗi mốc lưu RGB thô của lõi mẫu VÀ RGB thô của nền trắng xung quanh tại đúng thời điểm chụp — các mốc
+          không bắt buộc cùng điều kiện ánh sáng. Khi so màu (ở đây hoặc lúc TEST), mọi mốc được quy về chung
+          một nền trắng chuẩn (reference white của camera đang chọn) bằng công thức von Kries, rồi mới so bằng
+          Lab/DeltaE. Dữ liệu thô (sampleRGB/whiteRGB) luôn được giữ nguyên, không bao giờ bị ghi đè ngầm.
+        </p>
+      </details>
+    </section>
+
+  </div>
+</main>
+
+<footer>QuetpH · Calibration Mode — dữ liệu được lưu trong trình duyệt (localStorage), không tự động xoá.</footer>
+
+<script src="phcore.js"></script>
+<script src="phvision.js"></script>
+<script src="phcalib.js"></script>
+<script src="calib.js"></script>
+</body>
+</html>
