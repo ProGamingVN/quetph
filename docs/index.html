@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuetpH — Máy quét pH bằng ảnh</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <div class="brand-text">
+      <div class="title">QuetpH</div>
+      <div class="subtitle">Đo pH từ ảnh mẫu thử</div>
+    </div>
+  </div>
+  <nav class="nav-tabs">
+    <a href="index.html" class="active">Quét mẫu</a>
+    <a href="live.html">Quét trực tiếp</a>
+    <a href="compare.html">So sánh màu</a>
+    <a href="calibration.html">Hiệu chỉnh thang đo</a>
+  </nav>
+</header>
+
+<main class="wrap">
+  <div class="grid">
+
+    <!-- CỘT TRÁI: ảnh + công cụ đo -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Mẫu thí nghiệm</h2>
+        <span class="tag" id="modeTag">Chế độ điểm</span>
+      </div>
+
+      <div class="dropzone" id="dropzone">
+        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 9l5-5 5 5M12 4v13"/>
+        </svg>
+        <div>Kéo thả ảnh vào đây, hoặc bấm để chọn ảnh</div>
+        <div class="hint">Nên chụp dưới ánh sáng trắng, tránh lóa sáng để màu đo chính xác hơn</div>
+        <input type="file" id="fileInput" accept="image/*">
+      </div>
+
+      <div class="mode-switch" style="margin-top:14px;">
+        <button id="modePointBtn" class="active" type="button">🎯 Điểm (kính ngắm)</button>
+        <button id="modeDrawBtn" type="button">✏️ Vẽ vùng</button>
+        <button id="modeAutoBtn" type="button">🤖 Tự động (click mẫu)</button>
+      </div>
+
+      <div class="stage" id="stage" style="margin-top:14px;">
+        <div class="empty-msg" id="emptyMsg">Chưa có ảnh được nạp.<br>Đăng ảnh mẫu thử để bắt đầu quét màu.</div>
+        <div class="stage-inner" id="stageInner" style="display:none;">
+          <canvas id="canvas" class="point-cursor"></canvas>
+          <canvas id="overlayCanvas" class="overlay-canvas"></canvas>
+          <div class="reticle" id="reticle">
+            <svg viewBox="0 0 64 64">
+              <circle class="ring-outer" cx="32" cy="32" r="26" fill="none" stroke-width="2" stroke-dasharray="3 4"/>
+              <circle class="ring-inner" cx="32" cy="32" r="16" fill="none" stroke-width="1.4"/>
+              <line class="cross" x1="32" y1="2"  x2="32" y2="20" stroke-width="1.6"/>
+              <line class="cross" x1="32" y1="44" x2="32" y2="62" stroke-width="1.6"/>
+              <line class="cross" x1="2"  y1="32" x2="20" y2="32" stroke-width="1.6"/>
+              <line class="cross" x1="44" y1="32" x2="62" y2="32" stroke-width="1.6"/>
+              <circle class="dot" cx="32" cy="32" r="2.4"/>
+            </svg>
+            <div class="reticle-handle" id="reticleHandle"></div>
+            <div class="radius-badge" id="radiusBadge">r = 10px</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Điều khiển của chế độ điểm -->
+      <div id="pointControls">
+        <div class="control-row">
+          <label>Bán kính lấy mẫu</label>
+          <input type="range" id="radiusSlider" min="3" max="60" value="10">
+          <span class="val" id="radiusVal">10px</span>
+        </div>
+        <div class="hint-bubble">Kéo vòng ngắm 🎯 tới đúng vùng màu của mẫu thử. Vòng tròn thể hiện chính xác khu vực đang được lấy mẫu.</div>
+      </div>
+
+      <!-- Điều khiển của chế độ vẽ -->
+      <div id="drawControls" style="display:none;">
+        <div class="hint-bubble">Giữ chuột (hoặc chạm) và di để khoanh vùng màu cần đo — thả ra để tính pH trung bình của cả vùng đã khoanh.</div>
+        <div class="readout-sub" style="margin-top:10px;">
+          <div class="stat">SỐ ĐIỂM ẢNH TRONG VÙNG<br><b id="pixelCount">—</b></div>
+        </div>
+      </div>
+
+      <!-- Điều khiển của chế độ tự động -->
+      <div id="autoControls" style="display:none;">
+        <div class="hint-bubble">Click trực tiếp vào mẫu vật trong ảnh. Hệ thống sẽ tự xác định vùng mẫu, loại viền, tìm nền trắng xung quanh và hiệu chỉnh theo ánh sáng.</div>
+        <div class="btn-row" style="margin-top:10px;">
+          <label class="pill" style="cursor:pointer;"><input type="checkbox" id="dbgObject" checked style="vertical-align:middle;"> Vùng mẫu</label>
+          <label class="pill" style="cursor:pointer;"><input type="checkbox" id="dbgInner" checked style="vertical-align:middle;"> Vùng đo màu (lõi)</label>
+          <label class="pill" style="cursor:pointer;"><input type="checkbox" id="dbgBackground" checked style="vertical-align:middle;"> Nền tham chiếu</label>
+        </div>
+        <div class="btn-row" style="margin-top:10px;">
+          <label class="pill" style="cursor:pointer;"><input type="checkbox" id="useCalibToggle" style="vertical-align:middle;"> Dùng thang đo Calibration tự tạo (nếu đủ ≥ 2 mốc)</label>
+        </div>
+        <div id="autoResult" style="display:none; margin-top:14px; font-family:var(--mono); font-size:11px; color:var(--muted);">
+          <div class="swatch-row">
+            <div class="swatch" id="autoSwatchRaw" style="background:#eee;"></div>
+            <div class="swatch-info">MÀU MẪU (THÔ): <b id="autoRawHex">—</b></div>
+          </div>
+          <div class="swatch-row">
+            <div class="swatch" id="autoSwatchBg" style="background:#eee;"></div>
+            <div class="swatch-info">NỀN HIỆN TẠI: <b id="autoBgHex">—</b></div>
+          </div>
+          <div class="swatch-row">
+            <div class="swatch" id="autoSwatchCorrected" style="background:#eee;"></div>
+            <div class="swatch-info">MÀU SAU HIỆU CHỈNH: <b id="autoCorrHex">—</b></div>
+          </div>
+          <div style="margin-top:10px;">
+            Độ tin cậy ánh sáng: <b id="autoLightLevel">—</b> — <span id="autoLightReason">—</span><br>
+            Khoảng pH ước tính: <b id="autoPhRange">—</b><br>
+            Nguồn thang đo: <b id="autoChartSource">Mặc định</b>
+          </div>
+          <div class="btn-row" style="margin-top:10px;">
+            <button class="ghost" id="copyAutoRgbBtn" type="button" style="font-size:11px; padding:6px 12px;">📋 Copy RGB (mẫu + nền)</button>
+          </div>
+          <div id="copyAutoFeedback" style="display:none; margin-top:6px; color:var(--teal-deep);"></div>
+        </div>
+        <div id="autoError" style="display:none; margin-top:12px; font-family:var(--mono); font-size:11px; color:var(--coral);"></div>
+      </div>
+
+      <div class="btn-row">
+        <button class="ghost" id="zoomInBtn">Phóng to +</button>
+        <button class="ghost" id="zoomOutBtn">Thu nhỏ −</button>
+        <button class="ghost" id="resetViewBtn">Reset ảnh</button>
+        <button class="ghost" id="clearDrawBtn" style="display:none;">Xoá vùng đã vẽ</button>
+        <button class="primary" id="lockBtn" disabled>📌 Chốt điểm đo</button>
+      </div>
+
+      <details class="calib">
+        <summary>⚙ Hiệu chỉnh bảng màu pH (nâng cao)</summary>
+        <p style="font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:8px;">
+          Nếu bạn có bảng màu pH thực tế (in giấy / hộp thuốc thử) hơi khác bảng mặc định,
+          hãy chỉnh lại màu ở từng mốc để tăng độ chính xác khi so khớp.
+        </p>
+        <table class="calib-table" id="calibTable"></table>
+        <div class="btn-row">
+          <button id="saveCalibBtn">💾 Lưu hiệu chỉnh</button>
+          <button class="ghost" id="resetCalibBtn">↺ Về mặc định</button>
+        </div>
+      </details>
+    </section>
+
+    <!-- CỘT PHẢI: readout -->
+    <section>
+      <div class="readout">
+        <div class="readout-label">Giá trị pH đo được</div>
+        <div class="readout-value stale" id="phValue">— <span class="unit">pH</span></div>
+
+        <div class="readout-sub">
+          <div class="stat">ĐỘ TIN CẬY<br><b id="confVal">—</b></div>
+          <div class="stat">ΔE (SAI LỆCH MÀU)<br><b id="deVal">—</b></div>
+          <div class="stat">DUNG SAI HIỂN THỊ<br><b>± 0.05</b></div>
+        </div>
+
+        <div class="confidence-bar"><div class="confidence-fill" id="confFill" style="width:0%"></div></div>
+
+        <div class="swatch-row">
+          <div class="swatch" id="sampleSwatch" style="background:#eee;"></div>
+          <div class="swatch-info">
+            MÀU MẪU: <b id="sampleHex">—</b><br>
+            MÀU CHUẨN GẦN NHẤT: <b id="matchHex">—</b>
+          </div>
+        </div>
+
+        <div class="ph-strip" id="phStrip"></div>
+        <div class="ph-strip-labels"><span>0</span><span>2</span><span>4</span><span>6</span><span>7</span><span>8</span><span>10</span><span>12</span><span>14</span></div>
+      </div>
+
+      <div class="panel" style="margin-top:18px;">
+        <div class="panel-head">
+          <h2>Ghi chú đo</h2>
+          <span class="tag">LOG</span>
+        </div>
+        <div id="logList" style="font-family:var(--mono); font-size:11px; color:var(--muted); max-height:220px; overflow:auto;">
+          Chưa có điểm đo nào được chốt. Bấm "Chốt điểm đo" để ghi lại kết quả.
+        </div>
+        <div class="btn-row">
+          <button class="ghost" id="clearLogBtn">Xoá log</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer>QuetpH · Công cụ đo pH tham chiếu bằng màu ảnh — chỉ mang tính tham khảo, không thay thế thiết bị đo pH điện tử đã hiệu chuẩn.</footer>
+
+<script src="phcore.js"></script>
+<script src="phvision.js"></script>
+<script src="phcalib.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
