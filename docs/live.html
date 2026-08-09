@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QuetpH — Quét trực tiếp bằng camera</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark"></div>
+    <div class="brand-text">
+      <div class="title">QuetpH</div>
+      <div class="subtitle">Quét trực tiếp · Live Camera</div>
+    </div>
+  </div>
+  <nav class="nav-tabs">
+    <a href="index.html">Quét mẫu</a>
+    <a href="live.html" class="active">Quét trực tiếp</a>
+    <a href="compare.html">So sánh màu</a>
+    <a href="calibration.html">Hiệu chỉnh thang đo</a>
+  </nav>
+</header>
+
+<main class="wrap">
+  <div class="grid">
+
+    <!-- CỘT TRÁI: camera + khung hướng dẫn + checklist điều kiện -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Camera trực tiếp</h2>
+        <span class="tag" id="liveStatusTag">Chưa bật camera</span>
+      </div>
+
+      <div class="camera-wrap" id="cameraWrap">
+        <div class="camera-placeholder" id="cameraPlaceholder">
+          📷 Bấm "Bật camera" để bắt đầu quét trực tiếp.<br>
+          Trình duyệt sẽ hỏi xin quyền truy cập camera — hãy cho phép.<br>
+          <span style="color:var(--muted);">(Cần trang chạy qua HTTPS hoặc localhost)</span>
+        </div>
+        <video id="video" playsinline autoplay muted style="display:none;"></video>
+        <canvas id="guideCanvas" class="guide-canvas" style="display:none;"></canvas>
+        <img id="capturedImg" style="display:none;">
+      </div>
+
+      <div class="btn-row" style="margin-top:14px;">
+        <button class="primary" id="startCamBtn" type="button">🎥 Bật camera</button>
+        <button class="ghost" id="stopCamBtn" type="button" style="display:none;">⏹ Tắt camera</button>
+        <button class="ghost" id="manualCaptureBtn" type="button" style="display:none;">📸 Chụp ngay</button>
+        <button class="primary" id="rescanBtn" type="button" style="display:none;">🔁 Quét mẫu khác</button>
+      </div>
+
+      <div id="liveTuning">
+        <div class="control-row" style="margin-top:12px;">
+          <label>Cỡ khung mẫu</label>
+          <input type="range" id="squareSizeSlider" min="30" max="70" value="46">
+          <span class="val" id="squareSizeVal">46%</span>
+        </div>
+        <div class="btn-row">
+          <label class="pill" style="cursor:pointer;"><input type="checkbox" id="autoCaptureToggle" checked style="vertical-align:middle;"> Tự động chụp khi đủ điều kiện</label>
+          <label class="pill" style="cursor:pointer;"><input type="checkbox" id="useCalibToggle" style="vertical-align:middle;"> Dùng thang đo Calibration tự tạo (nếu đủ ≥ 2 mốc)</label>
+          <label class="pill" style="cursor:pointer;"><input type="checkbox" id="dbgRegionsToggle" checked style="vertical-align:middle;"> 🔍 Hiện lõi mẫu &amp; vùng nền</label>
+        </div>
+
+        <div class="status-list" id="statusList"></div>
+        <div class="capture-progress"><div class="capture-progress-fill" id="captureProgressFill"></div></div>
+
+        <div id="liveDebugSwatches" style="margin-top:12px;">
+          <div class="swatch-row">
+            <div class="swatch" id="liveCoreSwatch" style="background:#eee;"></div>
+            <div class="swatch-info">LÕI MẪU (TRỰC TIẾP): <b id="liveCoreHex">—</b></div>
+          </div>
+          <div class="swatch-row">
+            <div class="swatch" id="liveBgSwatch" style="background:#eee;"></div>
+            <div class="swatch-info">NỀN THAM CHIẾU (TRỰC TIẾP): <b id="liveBgHex">—</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hint-bubble" style="margin-top:12px;">
+        Đặt mẫu (có nền sáng/nhạt bao quanh, không cần trắng tuyệt đối) sao cho phần lõi mẫu lấp gần đầy khung
+        vuông nét đứt. Giữ máy ổn định, tránh đổ bóng lên mẫu — hệ thống sẽ tự chụp khi đủ điều kiện về ánh sáng
+        và độ khớp khung.
+      </div>
+    </section>
+
+    <!-- CỘT PHẢI: readout, giống trang Quét mẫu -->
+    <section>
+      <div class="readout">
+        <div class="readout-label">Giá trị pH đo được</div>
+        <div class="readout-value stale" id="phValue">— <span class="unit">pH</span></div>
+
+        <div class="readout-sub">
+          <div class="stat">ĐỘ TIN CẬY<br><b id="confVal">—</b></div>
+          <div class="stat">ΔE (SAI LỆCH MÀU)<br><b id="deVal">—</b></div>
+          <div class="stat">KHOẢNG pH ƯỚC TÍNH<br><b id="rangeVal">—</b></div>
+          <div class="stat">NGUỒN THANG ĐO<br><b id="chartSourceVal">Mặc định</b></div>
+        </div>
+
+        <div class="confidence-bar"><div class="confidence-fill" id="confFill" style="width:0%"></div></div>
+
+        <div class="swatch-row">
+          <div class="swatch" id="sampleSwatch" style="background:#eee;"></div>
+          <div class="swatch-info">MÀU MẪU (SAU HIỆU CHỈNH): <b id="sampleHex">—</b></div>
+        </div>
+        <div class="swatch-row">
+          <div class="swatch" id="bgSwatch" style="background:#eee;"></div>
+          <div class="swatch-info">NỀN ĐO ĐƯỢC: <b id="bgHex">—</b></div>
+        </div>
+
+        <div class="ph-strip" id="phStrip"></div>
+        <div class="ph-strip-labels"><span>0</span><span>2</span><span>4</span><span>6</span><span>7</span><span>8</span><span>10</span><span>12</span><span>14</span></div>
+      </div>
+
+      <div class="panel" style="margin-top:18px;">
+        <div class="panel-head">
+          <h2>Ghi chú đo</h2>
+          <span class="tag">LOG</span>
+        </div>
+        <div id="logList" style="font-family:var(--mono); font-size:11px; color:var(--muted); max-height:220px; overflow:auto;">
+          Chưa có kết quả nào được tự động chụp.
+        </div>
+        <div class="btn-row">
+          <button class="ghost" id="clearLogBtn">Xoá log</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer>QuetpH · Chế độ quét trực tiếp — cần trình duyệt hỗ trợ camera (getUserMedia) và trang chạy qua HTTPS. GitHub Pages đáp ứng sẵn yêu cầu này.</footer>
+
+<script src="phcore.js"></script>
+<script src="phvision.js"></script>
+<script src="phcalib.js"></script>
+<script src="live.js"></script>
+</body>
+</html>
